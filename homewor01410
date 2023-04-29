@@ -1,0 +1,313 @@
+-- 找出和最貴的產品同類別的所有產品
+
+select
+	ProductName,CategoryID,UnitPrice
+from Products
+where CategoryID =(
+	select top 1
+		CategoryID 
+	from Products 
+	order by UnitPrice desc
+)
+order by UnitPrice desc
+
+-- 找出和最貴的產品同類別最便宜的產品
+
+select top 1
+	CategoryID,ProductName,UnitPrice
+from Products
+where CategoryID =(
+	select top 1
+		CategoryID
+	from Products
+	order by UnitPrice desc
+)
+order by UnitPrice
+
+-- 計算出上面類別最貴和最便宜的兩個產品的價差
+
+with TypeID as(
+	select top 1
+		CategoryID 
+	from Products 
+	order by UnitPrice desc
+),
+MaxProduct as (
+	select top 1
+		*
+	from Products
+	where CategoryID = (select CategoryID from TypeID)
+	order by UnitPrice desc
+),
+MinProduct as (
+	select top 1
+		*
+	from Products
+	where CategoryID = (select CategoryID from TypeID)
+	order by UnitPrice 
+)
+select
+	a.ProductName,a.UnitPrice,
+	i.ProductName,i.UnitPrice,
+	a.UnitPrice-i.UnitPrice as gap
+from MaxProduct a
+join MinProduct i on a.CategoryID = i.CategoryID
+
+
+-- 找出沒有訂過任何商品的客戶所在的城市的所有客戶
+
+select
+*
+from Customers
+where City in (
+	select
+	c.City
+	from Customers c
+	left join Orders o on c.CustomerID=o.CustomerID
+	where o.OrderID is null
+)
+
+-- 找出第 5 貴跟第 8 便宜的產品的產品類別
+
+select
+	ProductName,CategoryID
+from Products
+order by UnitPrice desc
+offset (4) row fetch next 1row only
+
+select
+	ProductName,CategoryID
+from Products
+order by UnitPrice 
+offset (7) row fetch next 1row only
+
+-- 找出誰買過第 5 貴跟第 8 便宜的產品
+
+select distinct
+	c.CustomerID
+from Orders o
+inner join Customers c on o.CustomerID=c.CustomerID
+inner join [Order Details] od on od.OrderID=o.OrderID
+where ProductID = (
+	select
+		p.ProductID
+	from Products p
+	order by p.UnitPrice desc
+	offset (4) row fetch next 1row only
+)
+
+select distinct
+	c.CustomerID
+from Orders o
+inner join Customers c on o.CustomerID=c.CustomerID
+inner join [Order Details] od on od.OrderID=o.OrderID
+where ProductID = (
+	select
+		ProductID
+	from Products
+	order by UnitPrice 
+	offset (7) row fetch next 1row only
+)
+
+-- 找出誰賣過第 5 貴跟第 8 便宜的產品
+
+select
+	SupplierID
+from Products
+where ProductID = (
+	select
+		p.ProductID
+	from Products p
+	order by p.UnitPrice desc
+	offset (4) row fetch next 1row only
+)
+
+select
+	SupplierID
+from Products
+where ProductID = (
+	select
+		ProductID
+	from Products
+	order by UnitPrice 
+	offset (7) row fetch next 1row only
+)
+
+
+-- 找出 13 號星期五的訂單 (惡魔的訂單)
+
+select
+	*
+from Orders
+where DATEPART(WEEKDAY,OrderDate) = 6 and DATEPART(DAY,OrderDate)=13
+
+-- 找出誰訂了惡魔的訂單
+
+select
+	CustomerID
+from Orders
+where OrderDate in (
+	select
+	OrderDate
+	from Orders
+	where DATEPART(WEEKDAY,OrderDate) = 6 and DATEPART(DAY,OrderDate)=13
+)
+
+-- 找出惡魔的訂單裡有什麼產品
+
+select
+	ProductID
+from Orders o
+inner join [Order Details] od on od.OrderID=o.OrderID
+where OrderDate in (
+	select
+	OrderDate
+	from Orders
+	where DATEPART(WEEKDAY,OrderDate) = 6 and DATEPART(DAY,OrderDate)=13
+)
+
+
+-- 列出從來沒有打折 (Discount) 出售的產品
+
+select
+	od.ProductID
+from Orders o
+inner join [Order Details] od on od.OrderID=o.OrderID
+where Discount =0
+
+-- 列出購買非本國的產品的客戶
+
+select
+	o.CustomerID
+from Orders o
+inner join Customers c on c.CustomerID=o.CustomerID
+inner join [Order Details] od on od.OrderID=o.OrderID
+inner join Products p on p.ProductID=od.ProductID
+inner join Suppliers s on s.SupplierID=p.SupplierID
+where s.Country<>c.Country
+
+
+-- 列出在同個城市中有公司員工可以服務的客戶
+
+select
+	c.CustomerID
+from Customers c
+inner join Orders o on o.CustomerID=c.CustomerID
+inner join Employees e on e.EmployeeID=o.EmployeeID
+where e.City=c.City
+
+
+-- 列出那些產品沒有人買過
+
+select
+	p.ProductID,p.ProductName,od.OrderID
+from Products p
+left join [Order Details] od on od.OrderID=p.ProductID
+where od.OrderID is null
+
+----------------------------------------------------------------------------------------
+
+-- 列出所有在每個月月底的訂單
+
+	select
+		*
+	from Orders
+	where OrderDate = EOMONTH(OrderDate)
+
+-- 列出每個月月底售出的產品
+
+	select
+		od.OrderID,od.ProductID
+	from Orders o
+	inner join [Order Details] od on od.OrderID=o.OrderID
+	where OrderDate = EOMONTH(OrderDate)
+
+-- 找出有敗過最貴的三個產品中的任何一個的前三個大客戶
+
+
+
+-- 找出有敗過銷售金額前三高個產品的前三個大客戶
+
+WITH t1 AS
+(
+    SELECT
+        c.*,
+        od.*,
+        od.UnitPrice * od.Quantity * (1 - od.Discount) AS Total
+    FROM Customers c
+    INNER JOIN Orders o ON o.CustomerID = c.CustomerID
+    INNER JOIN [Order Details] od ON od.OrderID = o.OrderID
+)
+SELECT TOP 3
+    CustomerID
+FROM t1
+WHERE CustomerID IN (
+    SELECT DISTINCT
+        CustomerID
+    FROM t1
+    WHERE ProductID IN (
+        SELECT TOP 3
+            ProductID
+        FROM t1
+        GROUP BY ProductID
+        ORDER BY SUM(Total) DESC
+    )
+)
+GROUP BY CustomerID
+ORDER BY SUM(Total) DESC
+
+-- 找出有敗過銷售金額前三高個產品所屬類別的前三個大客戶
+
+-- 列出消費總金額高於所有客戶平均消費總金額的客戶的名字，以及客戶的消費總金額
+
+-- 列出最熱銷的產品，以及被購買的總金額
+
+-- 列出最少人買的產品
+
+-- 列出最沒人要買的產品類別 (Categories)
+
+-- 列出跟銷售最好的供應商買最多金額的客戶與購買金額 (含購買其它供應商的產品)
+
+-- 列出跟銷售最好的供應商買最多金額的客戶與購買金額 (不含購買其它供應商的產品)
+
+-- 列出那些產品沒有人買過
+
+-- 列出沒有傳真 (Fax) 的客戶和它的消費總金額
+
+-- 列出每一個城市消費的產品種類數量
+
+-- 列出目前沒有庫存的產品在過去總共被訂購的數量
+
+select
+	 p.ProductID,
+	 (
+		select
+			UnitsInStock
+		from Products
+		where ProductID = p.ProductID
+	 ) as UnitsInStock
+	 ,
+	 sum(od.Quantity) as totalQuantity
+from Products p
+inner join [Order Details] od on od.ProductID = p.ProductID
+where UnitsInStock=0
+group by p.ProductID
+
+
+
+-- 列出目前沒有庫存的產品在過去曾經被那些客戶訂購過
+
+-- 列出每位員工的下屬的業績總金額
+
+-- 列出每家貨運公司運送最多的那一種產品類別與總數量
+
+-- 列出每一個客戶買最多的產品類別與金額
+
+-- 列出每一個客戶買最多的那一個產品與購買數量
+
+-- 按照城市分類，找出每一個城市最近一筆訂單的送貨時間
+
+-- 列出購買金額第五名與第十名的客戶，以及兩個客戶的金額差距
+
+
+
